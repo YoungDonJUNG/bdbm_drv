@@ -1,0 +1,5 @@
+0x444c8bbb	bdbm_dm_get_inf	/home/jung/bdbm_drv/devices/dumbssd/dumbssd	EXPORT_SYMBOL
+0x1316cdf9	bdbm_unregister	/home/jung/bdbm_drv/devices/dumbssd/dumbssd	EXPORT_SYMBOL
+0xf25467f2	bdbm_dm_exit	/home/jung/bdbm_drv/devices/dumbssd/dumbssd	EXPORT_SYMBOL
+0x76cebecb	bdbm_dm_init	/home/jung/bdbm_drv/devices/dumbssd/dumbssd	EXPORT_SYMBOL
+0x2fc24b32	bdbm_register	/home/jung/bdbm_drv/devices/dumbssd/dumbssd	EXPORT_SYMBOL

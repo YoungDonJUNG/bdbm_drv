@@ -48,6 +48,13 @@ THE SOFTWARE.
 #include "algo/abm.h"
 #include "algo/page_ftl.h"
 
+//Don
+//8192count
+#include "queue/queue.h"
+bdbm_queue_t *fifo;
+int tmp;
+#define Queue_size 8192 
+
 
 /* FTL interface */
 bdbm_ftl_inf_t _ftl_page_ftl = {
@@ -269,7 +276,11 @@ uint32_t bdbm_page_ftl_create (bdbm_drv_info_t* bdi)
 	bdbm_sema_init (&p->gc_hlm_w.done);
 	hlm_reqs_pool_allocate_llm_reqs (p->gc_hlm_w.llm_reqs, p->nr_punits_pages, RP_MEM_PHY);
 
-	return 0;
+    //Don
+    fifo = bdbm_queue_create(1,Queue_size);
+	tmp = bdbm_queue_get_nr_items(fifo);
+    pr_info("count : %d\n",tmp);
+    return 0;
 }
 
 void bdbm_page_ftl_destroy (bdbm_drv_info_t* bdi)
@@ -297,6 +308,9 @@ void bdbm_page_ftl_destroy (bdbm_drv_info_t* bdi)
 	if (p->bai)
 		bdbm_abm_destroy (p->bai);
 	bdbm_free (p);
+
+    //Don
+    bdbm_queue_destroy(fifo); 
 }
 
 uint32_t bdbm_page_ftl_get_free_ppa (
@@ -351,6 +365,9 @@ uint32_t bdbm_page_ftl_get_free_ppa (
 	return 0;
 }
 
+//Don
+bdbm_phyaddr_t *test;
+
 uint32_t bdbm_page_ftl_map_lpa_to_ppa (
 	bdbm_drv_info_t* bdi, 
 	bdbm_logaddr_t* logaddr,
@@ -384,7 +401,16 @@ uint32_t bdbm_page_ftl_map_lpa_to_ppa (
 		/* get the mapping entry for lpa */
 		me = &p->ptr_mapping_table[logaddr->lpa[k]];
 		bdbm_bug_on (me == NULL);
-
+        
+        //Don
+        bdbm_queue_enqueue (fifo,0,phyaddr);
+        //tmp = bdbm_queue_get_nr_items(fifo);
+        //pr_info("queue item count : %d\n",tmp);
+        test = bdbm_queue_dequeue(fifo,0);
+        if(tmp == 0){
+        pr_info("test : %llu \n",test->channel_no);
+        tmp++;
+        }
 		/* update the mapping table */
 		if (me->status == PFTL_PAGE_VALID) {
 			bdbm_abm_invalidate_page (
@@ -395,6 +421,7 @@ uint32_t bdbm_page_ftl_map_lpa_to_ppa (
 				me->phyaddr.page_no,
 				me->sp_off
 			);
+            
 		}
 		me->status = PFTL_PAGE_VALID;
 		me->phyaddr.channel_no = phyaddr->channel_no;

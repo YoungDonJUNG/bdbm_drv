@@ -1,0 +1,2 @@
+/home/jung/bdbm_drv/devices/dumbssd/dumbssd.ko
+/home/jung/bdbm_drv/devices/dumbssd/../../common/utils/ufile.o /home/jung/bdbm_drv/devices/dumbssd/../../common/utils/utime.o /home/jung/bdbm_drv/devices/dumbssd/../../common/utils/uthread.o /home/jung/bdbm_drv/devices/dumbssd/../../common/utils/umemory.o /home/jung/bdbm_drv/devices/dumbssd/../common/dev_params.o /home/jung/bdbm_drv/devices/dumbssd/dev_hynix_nvme.o /home/jung/bdbm_drv/devices/dumbssd/dm_dumbssd.o

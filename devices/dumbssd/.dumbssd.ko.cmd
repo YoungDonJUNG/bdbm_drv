@@ -1,0 +1,1 @@
+cmd_/home/jung/bdbm_drv/devices/dumbssd/dumbssd.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/jung/bdbm_drv/devices/dumbssd/dumbssd.ko /home/jung/bdbm_drv/devices/dumbssd/dumbssd.o /home/jung/bdbm_drv/devices/dumbssd/dumbssd.mod.o

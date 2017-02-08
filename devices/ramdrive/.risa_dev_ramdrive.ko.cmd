@@ -1,0 +1,1 @@
+cmd_/home/jung/bdbm_drv/devices/ramdrive/risa_dev_ramdrive.ko := ld -r -m elf_x86_64 -T ./scripts/module-common.lds --build-id  -o /home/jung/bdbm_drv/devices/ramdrive/risa_dev_ramdrive.ko /home/jung/bdbm_drv/devices/ramdrive/risa_dev_ramdrive.o /home/jung/bdbm_drv/devices/ramdrive/risa_dev_ramdrive.mod.o

@@ -1,0 +1,1 @@
+cmd_/home/jung/bdbm_drv/tools/nvme/nvme.o := ld -m elf_x86_64   -r -o /home/jung/bdbm_drv/tools/nvme/nvme.o /home/jung/bdbm_drv/tools/nvme/core.o /home/jung/bdbm_drv/tools/nvme/pci.o /home/jung/bdbm_drv/tools/nvme/scsi.o /home/jung/bdbm_drv/tools/nvme/lightnvm.o 
