@@ -50,10 +50,43 @@ THE SOFTWARE.
 
 //Don
 //8192count
+#include <linux/sched.h>
 #include "queue/queue.h"
 bdbm_queue_t *fifo;
 int tmp;
-#define Queue_size 8192 
+#define QUEUE_SIZE 10000 
+struct info{
+    bdbm_logaddr_t* logaddr;
+    bdbm_phyaddr_t* phyaddr;
+    uint32_t time;
+};
+
+struct info *item;
+struct info *check;
+void insert_data(bdbm_queue_t *queue, struct info* info, 
+        bdbm_logaddr_t* logaddr, bdbm_phyaddr_t* phyaddr)
+{
+    info->logaddr = logaddr;
+    info->phyaddr = phyaddr;
+    info->time = local_clock();
+    bdbm_queue_enqueue(queue,0,info);
+}
+
+void check_time(bdbm_queue_t *queue){
+    uint32_t current_t = local_clock(); 
+
+    if(!bdbm_queue_is_empty(queue,0)){
+        check = bdbm_queue_dequeue(queue,0);
+        pr_info("current time : %u, logtime : %u\n",current_t,check->time);
+        pr_info("check page_no : %llu\n",check->phyaddr->page_no);
+        bdbm_queue_enqueue_top(queue,0,check);
+        check = bdbm_queue_dequeue(queue,0);
+        pr_info("top current time : %u, logtime : %u\n",current_t,check->time);
+        pr_info("top page_no : %llu\n", check->phyaddr->page_no);
+        bdbm_queue_enqueue_top(queue,0,check);
+    }
+}
+
 
 
 /* FTL interface */
@@ -277,9 +310,11 @@ uint32_t bdbm_page_ftl_create (bdbm_drv_info_t* bdi)
 	hlm_reqs_pool_allocate_llm_reqs (p->gc_hlm_w.llm_reqs, p->nr_punits_pages, RP_MEM_PHY);
 
     //Don
-    fifo = bdbm_queue_create(1,Queue_size);
+    fifo = bdbm_queue_create(1,QUEUE_SIZE);
 	tmp = bdbm_queue_get_nr_items(fifo);
     pr_info("count : %d\n",tmp);
+    item = (struct info*)kmalloc(sizeof(struct info),GFP_KERNEL);
+    check = (struct info*)kmalloc(sizeof(struct info),GFP_KERNEL);
     return 0;
 }
 
@@ -310,7 +345,9 @@ void bdbm_page_ftl_destroy (bdbm_drv_info_t* bdi)
 	bdbm_free (p);
 
     //Don
-    bdbm_queue_destroy(fifo); 
+    bdbm_queue_destroy(fifo);
+    kfree(item);
+    //kfree(check);
 }
 
 uint32_t bdbm_page_ftl_get_free_ppa (
@@ -365,8 +402,7 @@ uint32_t bdbm_page_ftl_get_free_ppa (
 	return 0;
 }
 
-//Don
-bdbm_phyaddr_t *test;
+
 
 uint32_t bdbm_page_ftl_map_lpa_to_ppa (
 	bdbm_drv_info_t* bdi, 
@@ -403,15 +439,20 @@ uint32_t bdbm_page_ftl_map_lpa_to_ppa (
 		bdbm_bug_on (me == NULL);
         
         //Don
-        bdbm_queue_enqueue (fifo,0,phyaddr);
-        //tmp = bdbm_queue_get_nr_items(fifo);
-        //pr_info("queue item count : %d\n",tmp);
-        test = bdbm_queue_dequeue(fifo,0);
-        if(tmp == 0){
-        pr_info("test : %llu \n",test->channel_no);
-        tmp++;
+
+
+        if(tmp <= 1){
+            insert_data(fifo,item,logaddr,phyaddr);
+            tmp = bdbm_queue_get_nr_items(fifo);
+            pr_info("insert page_no : %llu\n",phyaddr->page_no);
+            pr_info("tmp : %d\n",tmp);
+            //item = bdbm_queue_dequeue(fifo,0);
+            check_time(fifo);
         }
-		/* update the mapping table */
+        //pr_info("queue item count : %d\n",tmp);
+         
+		        
+        /* update the mapping table */
 		if (me->status == PFTL_PAGE_VALID) {
 			bdbm_abm_invalidate_page (
 				p->bai, 
