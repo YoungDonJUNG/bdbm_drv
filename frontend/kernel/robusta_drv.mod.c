@@ -32,11 +32,13 @@ __attribute__((section("__versions"))) = {
 	{ 0x99bf8c43, __VMLINUX_SYMBOL_STR(send_sig) },
 	{ 0x8526c35a, __VMLINUX_SYMBOL_STR(remove_wait_queue) },
 	{ 0xf19316e3, __VMLINUX_SYMBOL_STR(blk_queue_io_min) },
+	{ 0xc87c1f84, __VMLINUX_SYMBOL_STR(ktime_get) },
 	{ 0xb0059ec3, __VMLINUX_SYMBOL_STR(filp_close) },
 	{ 0x32850c6c, __VMLINUX_SYMBOL_STR(vfs_fsync) },
 	{ 0x76cebecb, __VMLINUX_SYMBOL_STR(bdbm_dm_init) },
 	{ 0x999e8297, __VMLINUX_SYMBOL_STR(vfree) },
 	{ 0x91715312, __VMLINUX_SYMBOL_STR(sprintf) },
+	{ 0xf4c91ed, __VMLINUX_SYMBOL_STR(ns_to_timespec) },
 	{ 0xd8bb8c0b, __VMLINUX_SYMBOL_STR(kthread_create_on_node) },
 	{ 0xf25467f2, __VMLINUX_SYMBOL_STR(bdbm_dm_exit) },
 	{ 0x9e88526, __VMLINUX_SYMBOL_STR(__init_waitqueue_head) },
@@ -91,4 +93,4 @@ __attribute__((section(".modinfo"))) =
 "depends=risa_dev_ramdrive";
 
 
-MODULE_INFO(srcversion, "FBDBD3098BF270DC7C61C2F");
+MODULE_INFO(srcversion, "F9E397A2CE570FBC27E7896");

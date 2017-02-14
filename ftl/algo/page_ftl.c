@@ -49,45 +49,8 @@ THE SOFTWARE.
 #include "algo/page_ftl.h"
 
 //Don
-//8192count
-#include <linux/sched.h>
 #include "queue/queue.h"
-bdbm_queue_t *fifo;
-int tmp;
-#define QUEUE_SIZE 10000 
-struct info{
-    bdbm_logaddr_t* logaddr;
-    bdbm_phyaddr_t* phyaddr;
-    uint32_t time;
-};
-
-struct info *item;
-struct info *check;
-void insert_data(bdbm_queue_t *queue, struct info* info, 
-        bdbm_logaddr_t* logaddr, bdbm_phyaddr_t* phyaddr)
-{
-    info->logaddr = logaddr;
-    info->phyaddr = phyaddr;
-    info->time = local_clock();
-    bdbm_queue_enqueue(queue,0,info);
-}
-
-void check_time(bdbm_queue_t *queue){
-    uint32_t current_t = local_clock(); 
-
-    if(!bdbm_queue_is_empty(queue,0)){
-        check = bdbm_queue_dequeue(queue,0);
-        pr_info("current time : %u, logtime : %u\n",current_t,check->time);
-        pr_info("check page_no : %llu\n",check->phyaddr->page_no);
-        bdbm_queue_enqueue_top(queue,0,check);
-        check = bdbm_queue_dequeue(queue,0);
-        pr_info("top current time : %u, logtime : %u\n",current_t,check->time);
-        pr_info("top page_no : %llu\n", check->phyaddr->page_no);
-        bdbm_queue_enqueue_top(queue,0,check);
-    }
-}
-
-
+#include <linux/ktime.h>
 
 /* FTL interface */
 bdbm_ftl_inf_t _ftl_page_ftl = {
@@ -141,6 +104,116 @@ typedef struct {
 	/* for bad-block scanning */
 	bdbm_sema_t badblk;
 } bdbm_page_ftl_private_t;
+
+
+//Don
+bdbm_queue_t *fifo;
+
+int tmp;
+int destroy_c;
+#define QUEUE_SIZE 10000 
+#define QID 0
+//15 Seconds
+#define STANDARD_T 15
+
+struct info{
+    bdbm_logaddr_t* logaddr;
+    bdbm_page_mapping_entry_t* me;
+    ktime_t time;
+    int sp_off; 
+};
+
+//Time
+long save;
+ktime_t timestamp;
+ktime_t timestamp_e;
+
+struct info *item;
+struct info *check;
+struct info *tmp_p;
+
+void recovery(bdbm_queue_t *queue){
+    bdbm_page_ftl_private_t* p = _ftl_page_ftl.ptr_private;
+    bdbm_page_mapping_entry_t* me = NULL;
+    struct info* log = NULL;
+    int size_c;
+    int queue_size = bdbm_queue_get_nr_items(queue);
+    pr_info("queue size : %d\n",queue_size);
+    if(queue_size != 0){
+        for(size_c = 0; size_c < queue_size; size_c++){
+            log = bdbm_queue_dequeue(queue,QID);
+            me = &p->ptr_mapping_table[log->logaddr->lpa[log->sp_off]];
+            
+            pr_info("out queue : %lld\t, %lld\t, %lld\t, %lld\t, %d\t, %llx\n",
+                    log->me->phyaddr.channel_no, log->me->phyaddr.chip_no,
+                    log->me->phyaddr.block_no, log->me->phyaddr.page_no,
+                    log->me->sp_off,log->logaddr->lpa[log->sp_off]);
+
+            bdbm_abm_invalidate_page(
+                    p->bai,
+                    me->phyaddr.channel_no,
+                    me->phyaddr.chip_no,
+                    me->phyaddr.block_no,
+                    me->phyaddr.page_no,
+                    me->sp_off
+                    );
+            me = log->me; 
+            pr_info("Recovery\n");
+        }
+    }
+}
+
+
+void check_t(bdbm_queue_t *queue){
+    int size_c;
+    ktime_t current_t;
+    long time;
+    bdbm_page_ftl_private_t* p = _ftl_page_ftl.ptr_private;
+    current_t = ktime_get(); 
+    
+    if(bdbm_queue_is_full(queue)){
+        for(size_c = 0; size_c < QUEUE_SIZE; size_c++){
+            check = bdbm_queue_dequeue(queue, QID);
+            bdbm_abm_invalidate_page(
+                    p->bai,
+                    check->me->phyaddr.channel_no,
+                    check->me->phyaddr.chip_no,
+                    check->me->phyaddr.block_no,
+                    check->me->phyaddr.page_no,
+                    check->me->sp_off
+                    );
+            kfree(check);
+        }
+    }else{
+        int queue_size = bdbm_queue_get_nr_items(queue);
+        for(size_c = 0; size_c <= queue_size; size_c++){ 
+            tmp_p = bdbm_queue_top(queue, QID);
+            
+            time = ktime_to_timespec(ktime_sub(current_t, 
+                        tmp_p->time)).tv_sec;
+            pr_info("Time : %ld\n",time);
+            if(time > STANDARD_T){
+                tmp_p = bdbm_queue_dequeue(queue,QID);
+                bdbm_abm_invalidate_page(
+                        p->bai,
+                        tmp_p->me->phyaddr.channel_no,
+                        tmp_p->me->phyaddr.chip_no,
+                        tmp_p->me->phyaddr.block_no,
+                        tmp_p->me->phyaddr.page_no,
+                        tmp_p->me->sp_off
+                        );
+                kfree(tmp_p);
+                pr_info("time : %ld\n",time);
+                tmp++;
+            }else{
+                pr_info("tmp : %d\n",tmp);
+                tmp = 0;
+                break;
+            }
+        } 
+    }
+}
+
 
 
 bdbm_page_mapping_entry_t* __bdbm_page_ftl_create_mapping_table (
@@ -310,11 +383,8 @@ uint32_t bdbm_page_ftl_create (bdbm_drv_info_t* bdi)
 	hlm_reqs_pool_allocate_llm_reqs (p->gc_hlm_w.llm_reqs, p->nr_punits_pages, RP_MEM_PHY);
 
     //Don
-    fifo = bdbm_queue_create(1,QUEUE_SIZE);
-	tmp = bdbm_queue_get_nr_items(fifo);
-    pr_info("count : %d\n",tmp);
-    item = (struct info*)kmalloc(sizeof(struct info),GFP_KERNEL);
-    check = (struct info*)kmalloc(sizeof(struct info),GFP_KERNEL);
+    fifo = bdbm_queue_create(1, QUEUE_SIZE);
+    timestamp = ktime_get();
     return 0;
 }
 
@@ -345,9 +415,14 @@ void bdbm_page_ftl_destroy (bdbm_drv_info_t* bdi)
 	bdbm_free (p);
 
     //Don
-    bdbm_queue_destroy(fifo);
-    kfree(item);
-    //kfree(check);
+    int count;
+     destroy_c = bdbm_queue_get_nr_items(fifo);
+     pr_info("Destroy : %d\n",destroy_c);
+     for(count = 0; count <= destroy_c; count++){
+         check = bdbm_queue_dequeue(fifo,QID);
+         kfree(check);
+     }
+     bdbm_queue_destroy(fifo);
 }
 
 uint32_t bdbm_page_ftl_get_free_ppa (
@@ -414,6 +489,19 @@ uint32_t bdbm_page_ftl_map_lpa_to_ppa (
 	bdbm_page_mapping_entry_t* me = NULL;
 	int k;
 
+    //Don
+    long test;
+    timestamp_e = ktime_get();
+    test = ktime_to_timespec(ktime_sub(timestamp_e, timestamp)).tv_sec;
+    pr_info("Inside update %ld\n", test);
+    if(test > 70){
+        pr_info("In recovery\n");
+        recovery(fifo);
+        pr_info("Out recovery\n");
+        return 0;
+    }
+
+
 	/* is it a valid logical address */
 	for (k = 0; k < np->nr_subpages_per_page; k++) {
 		if (logaddr->lpa[k] == -1) {
@@ -438,39 +526,50 @@ uint32_t bdbm_page_ftl_map_lpa_to_ppa (
 		me = &p->ptr_mapping_table[logaddr->lpa[k]];
 		bdbm_bug_on (me == NULL);
         
-        //Don
-
-
-        if(tmp <= 1){
-            insert_data(fifo,item,logaddr,phyaddr);
-            tmp = bdbm_queue_get_nr_items(fifo);
-            pr_info("insert page_no : %llu\n",phyaddr->page_no);
-            pr_info("tmp : %d\n",tmp);
-            //item = bdbm_queue_dequeue(fifo,0);
-            check_time(fifo);
-        }
-        //pr_info("queue item count : %d\n",tmp);
          
 		        
         /* update the mapping table */
 		if (me->status == PFTL_PAGE_VALID) {
-			bdbm_abm_invalidate_page (
-				p->bai, 
-				me->phyaddr.channel_no, 
-				me->phyaddr.chip_no,
-				me->phyaddr.block_no,
-				me->phyaddr.page_no,
-				me->sp_off
-			);
             
+            item = (struct info*)kmalloc(sizeof(struct info),GFP_KERNEL);
+
+            //Don
+            item->time = ktime_get();
+            item->logaddr = logaddr;
+            
+            //Can't use pointer
+            //Need Change this
+            item->me = me;
+
+            item->sp_off = k;
+            bdbm_queue_enqueue(fifo, QID, item);
+            
+            pr_info("insert queue : %lld\t, %lld\t, %lld\t, %lld\t, %d\t, %llx\n",
+                    me->phyaddr.channel_no, me->phyaddr.chip_no,
+                    me->phyaddr.block_no, me->phyaddr.page_no,
+                    me->sp_off,logaddr->lpa[k]);
+
+            check_t(fifo);   
+ //           test(fifo); 
+ //            bdbm_abm_invalidate_page (
+ //				p->bai, 
+ //				me->phyaddr.channel_no, 
+ //				me->phyaddr.chip_no,
+ //				me->phyaddr.block_no,
+ //				me->phyaddr.page_no,
+ //				me->sp_off
+ //			);
 		}
 		me->status = PFTL_PAGE_VALID;
 		me->phyaddr.channel_no = phyaddr->channel_no;
-		me->phyaddr.chip_no = phyaddr->chip_no;
-		me->phyaddr.block_no = phyaddr->block_no;
-		me->phyaddr.page_no = phyaddr->page_no;
-		me->sp_off = k;
-	}
+        me->phyaddr.chip_no = phyaddr->chip_no;
+        me->phyaddr.block_no = phyaddr->block_no;
+        me->phyaddr.page_no = phyaddr->page_no;
+        me->sp_off = k;
+
+    }
+
+
 
 	return 0;
 }
